@@ -1,3 +1,12 @@
+/**
+ * @file server.cpp
+ * @author Полежаев А.И.
+ * @date 15.12.2025
+ * @brief Реализация методов класса Server для обработки клиентских подключений.
+ * @details Содержит реализацию сетевого сервера с аутентификацией пользователей,
+ *          обработкой векторных данных и логированием событий.
+ */
+
 #include "server.h"
 #include <iostream>
 #include <fstream>
@@ -13,9 +22,20 @@
 #include <openssl/evp.h>
 #include <cstdlib>
 
+/**
+ * @brief Конструктор класса Server.
+ * @param port Порт для прослушивания подключений.
+ * @param userDbPath Путь к файлу базы данных пользователей.
+ * @param logPath Путь к файлу журнала сервера.
+ */
 Server::Server(int port, const std::string& userDbPath, const std::string& logPath)
     : port(port), userDbPath(userDbPath), logPath(logPath) {}
 
+/**
+ * @brief Загружает базу данных пользователей из файла.
+ * @details Читает файл построчно, парсит строки формата "логин:пароль"
+ *          и сохраняет данные во внутреннем контейнере users.
+ */
 void Server::loadUserDatabase() {
     std::ifstream file(userDbPath);
     if (!file.is_open()) {
@@ -37,6 +57,11 @@ void Server::loadUserDatabase() {
     file.close();
 }
 
+/**
+ * @brief Записывает сообщение об ошибке в файл журнала.
+ * @param message Текст сообщения об ошибке.
+ * @param isCritical Флаг критичности ошибки.
+ */
 void Server::logError(const std::string& message, bool isCritical) {
     std::ofstream logFile(logPath, std::ios::app);
     if (!logFile.is_open()) {
@@ -53,6 +78,11 @@ void Server::logError(const std::string& message, bool isCritical) {
     logFile.close();
 }
 
+/**
+ * @brief Вычисляет MD5-хэш для входной строки.
+ * @param input Входная строка для хэширования.
+ * @return MD5-хэш строки в шестнадцатеричном формате (верхний регистр).
+ */
 std::string Server::md5Hash(const std::string& input) {
     EVP_MD_CTX* context = EVP_MD_CTX_new();
     if (!context) {
@@ -91,6 +121,11 @@ std::string Server::md5Hash(const std::string& input) {
     return result;
 }
 
+/**
+ * @brief Аутентифицирует клиента по протоколу с солью.
+ * @param clientSocket Дескриптор сокета клиента.
+ * @return true если аутентификация успешна, false в противном случае.
+ */
 bool Server::authenticate(int clientSocket) {
     char buffer[256];
     ssize_t bytesRead = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
@@ -152,7 +187,11 @@ bool Server::authenticate(int clientSocket) {
     return false;
 }
 
-
+/**
+ * @brief Вычисляет произведение элементов вектора с проверкой переполнения.
+ * @param vector Вектор 16-битных целых чисел.
+ * @return Произведение элементов вектора.
+ */
 int16_t Server::calculateProduct(const std::vector<int16_t>& vector) {
     if (vector.empty()) {
         return 0;
@@ -173,6 +212,10 @@ int16_t Server::calculateProduct(const std::vector<int16_t>& vector) {
     return static_cast<int16_t>(product);
 }
 
+/**
+ * @brief Обрабатывает передачу векторов от аутентифицированного клиента.
+ * @param clientSocket Дескриптор сокета клиента.
+ */
 void Server::processVectors(int clientSocket) {
     
     // Читаем количество векторов
@@ -260,6 +303,10 @@ void Server::processVectors(int clientSocket) {
 
 }
 
+/**
+ * @brief Обрабатывает подключение одного клиента.
+ * @param clientSocket Дескриптор сокета клиента.
+ */
 void Server::handleClient(int clientSocket) {
     std::cout << "New client connection" << std::endl;
     
@@ -274,8 +321,27 @@ void Server::handleClient(int clientSocket) {
     close(clientSocket);
 }
 
+/**
+ * @brief Запускает основной цикл работы сервера.
+ * @return true если сервер успешно запущен, false при критической ошибке.
+ */
 bool Server::start() {
+    std::ofstream testLog(logPath, std::ios::app);
+    if (!testLog.is_open()) {
+        std::cerr << "ERROR: Cannot open log file: " << logPath << std::endl;
+        // Пробуем альтернативный путь
+        logPath = "./server_fallback.log";
+        std::cerr << "Trying fallback: " << logPath << std::endl;
+    } else {
+        testLog.close();
+    }
+    
+    logError("=== Server starting ===", false);
+    
     loadUserDatabase();
+
+    logError("User database loaded, users: " + std::to_string(users.size()), false);
+
     system("mkdir -p log");
     // Инициализация OpenSSL
     OpenSSL_add_all_digests();
